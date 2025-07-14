@@ -16,7 +16,7 @@ const navItems = [
   { href: "/dashboard/patient", label: "Home", roles: ["patient"] },  
   { href: "/dashboard/patient/cdt", label: "Take CDT", roles: ["patient"] }, 
   { href: "/dashboard/patient/find-doctor", label: "Find-Doctor", roles: ["patient"] }, 
-   { href: "/dashboard/request-status", label: "Request-Status", roles: ["patient"] },
+   { href: "/dashboard/patient/request-status", label: "Request-Status", roles: ["patient"] },
   { href: "/dashboard/patient/chat", label: "Chat", roles: ["patient"] }
 ]
 
