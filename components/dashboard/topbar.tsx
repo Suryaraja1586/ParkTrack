@@ -10,10 +10,14 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/dashboard/doctor", label: "Home", roles: ["doctor"] },
-  { href: "/dashboard/patient", label: "Home", roles: ["patient"] },
-  { href: "/dashboard/patient/cdt", label: "Take CDT", roles: ["patient"] },
+  { href: "/dashboard/doctor/requests", label: "Requests", roles: ["doctor"] },
   { href: "/dashboard/doctor/reports", label: "Reports", roles: ["doctor"] },
-  { href: "/dashboard/chat", label: "Chat", roles: ["doctor", "patient"] }
+  { href: "/dashboard/doctor/chat", label: "Chat", roles: ["doctor"] },
+  { href: "/dashboard/patient", label: "Home", roles: ["patient"] },  
+  { href: "/dashboard/patient/cdt", label: "Take CDT", roles: ["patient"] }, 
+  { href: "/dashboard/patient/find-doctor", label: "Find-Doctor", roles: ["patient"] }, 
+   { href: "/dashboard/request-status", label: "Request-Status", roles: ["patient"] },
+  { href: "/dashboard/patient/chat", label: "Chat", roles: ["patient"] }
 ]
 
 export function Topbar() {
