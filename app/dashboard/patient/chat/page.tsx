@@ -233,7 +233,7 @@ export default function PatientChatPage() {
             <h2 className="text-xl font-bold text-teal-700">
               Chat with {doctor.name}
             </h2>
-            {newMessageAlert}
+            {newMessageAlert && <Bell className="w-4 h-4 text-red-500 animate-pulse ml-2" />}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50">

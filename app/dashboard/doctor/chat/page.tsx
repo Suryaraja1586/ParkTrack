@@ -219,7 +219,7 @@ export default function DoctorChatPage() {
             >
               <div className="flex items-center justify-between">
                 <p className="text-teal-800">{patient.name}</p>
-                {newMessageAlert[patient.$id]}
+                {newMessageAlert[patient.$id] && <Bell className="w-4 h-4 text-red-500 animate-pulse" />}
               </div>
             </div>
           ))
