@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -198,7 +199,7 @@ export default function DoctorChatPage() {
   }
 
   return (
-    <div className ="flex h-screen bg-gradient-to-br from-teal-100 to-gray-100">
+    <div className="flex h-screen bg-gradient-to-br from-teal-100 to-gray-100">
       {/* Patient List (Sidebar) */}
       <div className="w-1/4 bg-white shadow-md p-4 overflow-y-auto hidden md:block">
         <h2 className="text-xl font-bold text-teal-700 mb-4">Patients</h2>
@@ -218,7 +219,7 @@ export default function DoctorChatPage() {
             >
               <div className="flex items-center justify-between">
                 <p className="text-teal-800">{patient.name}</p>
-                {newMessageAlert[patient.$id] && <Bell className="w-4 h-4 text-red-500 animate-pulse" />}
+                {newMessageAlert[patient.$id]}
               </div>
             </div>
           ))
@@ -305,7 +306,7 @@ export default function DoctorChatPage() {
               className="p-2 text-teal-700 hover:text-teal-800 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </button>
             <button
@@ -314,7 +315,7 @@ export default function DoctorChatPage() {
               className="p-2 bg-teal-700 text-white rounded-full hover:bg-teal-800 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </button>
             <div id="typingIndicator" className="typing-dots hidden">

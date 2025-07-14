@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -98,91 +99,115 @@ export default function PatientChatPage() {
     fetchData()
   }, [user])
 
-const sendMessage = async () => {
-  if (!user?.userId || !doctor?.$id || (!message.trim() && !file) || isSending) return
+  const sendMessage = async () => {
+    if (!user?.userId || !doctor?.$id || (!message.trim() && !file) || isSending) return
 
-  setIsSending(true)
-  let tempMessage: Message | null = null // Declare tempMessage outside try block
+    setIsSending(true)
+    let tempMessage: Message | null = null // Declare tempMessage outside try block
 
-  try {
-    let fileId: string | undefined
-    let fileName: string | undefined
+    try {
+      let fileId: string | undefined
+      let fileName: string | undefined
 
-    if (file) {
-      const allowedTypes = ["image/jpeg", "image/png", "application/pdf"]
-      const maxSize = 5 * 1024 * 1024
-      if (!allowedTypes.includes(file.type)) {
-        toast.error("Only JPEG, PNG, and PDF files are allowed")
-        setIsSending(false)
-        return
+      if (file) {
+        const allowedTypes = ["image/jpeg", "image/png", "application/pdf"]
+        const maxSize = 5 * 1024 * 1024
+        if (!allowedTypes.includes(file.type)) {
+          toast.error("Only JPEG, PNG, and PDF files are allowed")
+          setIsSending(false)
+          return
+        }
+        if (file.size > maxSize) {
+          toast.error("File size must be less than 5MB")
+          setIsSending(false)
+          return
+        }
+
+        const fileRes = await storage.createFile(
+          APPWRITE_CONFIG.STORAGE_BUCKET_ID,
+          ID.unique(),
+          file,
+          ["read(\"users\")", "write(\"users\")"]
+        )
+        fileId = fileRes.$id
+        fileName = file.name
       }
-      if (file.size > maxSize) {
-        toast.error("File size must be less than 5MB")
-        setIsSending(false)
-        return
+
+      tempMessage = {
+        $id: ID.unique(),
+        senderId: user.userId,
+        receiverId: doctor.$id,
+        message: message.trim() || (file ? `File shared` : ""),
+        timestamp: new Date().toISOString(),
+        fileId,
+        fileName
+      } as Message
+
+      setMessages((prev) => [...prev, tempMessage as Message])
+
+      const newMessage: {
+        senderId: string
+        receiverId: string
+        message: string
+        timestamp: string
+        fileId?: string
+        fileName?: string
+      } = {
+        senderId: user.userId,
+        receiverId: doctor.$id,
+        message: message.trim() || (file ? `File shared` : ""),
+        timestamp: new Date().toISOString()
       }
 
-      const fileRes = await storage.createFile(
-        APPWRITE_CONFIG.STORAGE_BUCKET_ID,
+      if (fileId) newMessage.fileId = fileId
+      if (fileName) newMessage.fileName = fileName
+
+      const res = await databases.createDocument<Message>(
+        APPWRITE_CONFIG.DATABASE_ID,
+        APPWRITE_CONFIG.MESSAGE_COLLECTION_ID,
         ID.unique(),
-        file,
-        ["read(\"users\")", "write(\"users\")"]
+        newMessage
       )
-      fileId = fileRes.$id
-      fileName = file.name
+
+      setMessages((prev) => prev.map((msg) => (msg.$id === tempMessage!.$id ? res : msg)))
+      setMessage("")
+      setFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      toast.success("Message sent successfully")
+    } catch (err) {
+      toast.error("Failed to send message")
+      console.error(err)
+      if (tempMessage) {
+        setMessages((prev) => prev.filter((msg) => msg.$id !== tempMessage!.$id))
+      }
+    } finally {
+      setIsSending(false)
     }
-
-    tempMessage = {
-      $id: ID.unique(),
-      senderId: user.userId,
-      receiverId: doctor.$id,
-      message: message.trim() || (file ? `File shared` : ""),
-      timestamp: new Date().toISOString(),
-      fileId,
-      fileName
-    } as Message
-
-    setMessages((prev) => [...prev, tempMessage as Message])
-
-    const newMessage: {
-      senderId: string
-      receiverId: string
-      message: string
-      timestamp: string
-      fileId?: string
-      fileName?: string
-    } = {
-      senderId: user.userId,
-      receiverId: doctor.$id,
-      message: message.trim() || (file ? `File shared` : ""),
-      timestamp: new Date().toISOString()
-    }
-
-    if (fileId) newMessage.fileId = fileId
-    if (fileName) newMessage.fileName = fileName
-
-    const res = await databases.createDocument<Message>(
-      APPWRITE_CONFIG.DATABASE_ID,
-      APPWRITE_CONFIG.MESSAGE_COLLECTION_ID,
-      ID.unique(),
-      newMessage
-    )
-
-    setMessages((prev) => prev.map((msg) => (msg.$id === tempMessage!.$id ? res : msg)))
-    setMessage("")
-    setFile(null)
-    if (fileInputRef.current) fileInputRef.current.value = ""
-    toast.success("Message sent successfully")
-  } catch (err) {
-    toast.error("Failed to send message")
-    console.error(err)
-    if (tempMessage) {
-      setMessages((prev) => prev.filter((msg) => msg.$id !== tempMessage!.$id))
-    }
-  } finally {
-    setIsSending(false)
   }
-}
+
+  const downloadFile = async (fileId: string | undefined, fileName: string | undefined, message: Message) => {
+    if (!fileId || !fileName) {
+      toast.error("Invalid file data")
+      return
+    }
+
+    if (!user?.userId || (message.senderId !== user.userId && message.receiverId !== user.userId)) {
+      toast.error("You don’t have permission to download this file")
+      return
+    }
+
+    try {
+      const url = storage.getFileDownload(APPWRITE_CONFIG.STORAGE_BUCKET_ID, fileId)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = fileName
+      link.click()
+      toast.success("File downloaded successfully")
+    } catch (err) {
+      toast.error("Failed to download file")
+      console.error(err)
+    }
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !isSending) {
@@ -199,10 +224,6 @@ const sendMessage = async () => {
     return <p className="p-6 text-center text-gray-500">You are not assigned to a doctor yet. Please request one.</p>
   }
 
-  function downloadFile(arg0: string, arg1: string, msg: Message) {
-    throw new Error("Function not implemented.")
-  }
-
   return (
     <div className="flex h-screen bg-gradient-to-br from-teal-100 to-gray-100">
       {/* Chat Area */}
@@ -212,7 +233,7 @@ const sendMessage = async () => {
             <h2 className="text-xl font-bold text-teal-700">
               Chat with {doctor.name}
             </h2>
-            {newMessageAlert && <Bell className="w-4 h-4 text-red-500 animate-pulse ml-2" />}
+            {newMessageAlert}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
@@ -235,14 +256,14 @@ const sendMessage = async () => {
                       download={msg.fileName || "Unnamed File"}
                       onClick={(e) => {
                         e.preventDefault()
-                        downloadFile(msg.fileId as string, msg.fileName || "Unnamed File", msg)
+                        downloadFile(msg.fileId, msg.fileName, msg)
                       }}
                       className="text-teal-600 font-semibold hover:text-teal-800 transition-colors"
                     >
                       Download
                     </a>
-                    </div>
-                  )}
+                  </div>
+                )}
                 <p className="text-xs text-gray-500 mt-1">{format(new Date(msg.timestamp), "PPp")}</p>
               </div>
             ))
@@ -284,7 +305,7 @@ const sendMessage = async () => {
               className="p-2 text-teal-700 hover:text-teal-800 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </button>
             <button
@@ -293,7 +314,7 @@ const sendMessage = async () => {
               className="p-2 bg-teal-700 text-white rounded-full hover:bg-teal-800 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </button>
             <div id="typingIndicator" className="typing-dots hidden">

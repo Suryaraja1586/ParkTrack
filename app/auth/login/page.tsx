@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -15,8 +16,14 @@ export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [selectedRole, setSelectedRole] = useState<"doctor" | "patient" | "">("")
 
   const handleLogin = async () => {
+    if (!selectedRole) {
+      toast.error("Please select a role (Doctor or Patient)")
+      return
+    }
+
     try {
       // Remove existing session
       try {
@@ -37,6 +44,7 @@ export default function LoginPage() {
 
       const user = docs.documents[0]
       if (!user?.role) throw new Error("User role not found.")
+      if (user.role !== selectedRole) throw new Error(`Account is registered as ${user.role}, not ${selectedRole}.`)
 
       localStorage.setItem(
         "user",
@@ -87,6 +95,21 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 className="w-full p-3 border border-teal-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
               />
+            </div>
+            <div>
+              <Label htmlFor="role" className="text-teal-800 font-semibold block mb-2">
+                Role
+              </Label>
+              <select
+                id="role"
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as "doctor" | "patient" | "")}
+                className="w-full p-3 border border-teal-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+              >
+                <option value="">Select Role</option>
+                <option value="doctor">Doctor</option>
+                <option value="patient">Patient</option>
+              </select>
             </div>
             <Button
               onClick={handleLogin}
