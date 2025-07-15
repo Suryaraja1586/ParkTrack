@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Inter } from "next/font/google";
+import NotificationPermission from "@/components/NotificationPermission";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className={inter.className}>
+        <NotificationPermission />
         {children}
         <Toaster />
       </body>
