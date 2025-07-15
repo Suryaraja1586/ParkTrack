@@ -8,13 +8,14 @@
   "description": "Parkinson’s Disease Tracker App",
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
-      "type": "image/png",
+      "src": "/icons/icon1.jpg",
+      "type": "/image/icon2.jpg",
       "sizes": "192x192"
     },
     {
-      "src": "/icons/icon-512x512.png",
-      "type": "image/png",
+   
+      "src": "/icons/icon1.jpg",
+      "type": "/image/icon2.jpg",
       "sizes": "512x512"
     }
   ]
