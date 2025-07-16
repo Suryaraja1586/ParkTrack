@@ -1,27 +1,38 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 export default function NotificationPermission() {
+  const permissionRequested = useRef(false);
+
   useEffect(() => {
-    console.log("NotificationPermission component mounted, current permission:", Notification.permission);
-    if (typeof window !== "undefined" && Notification.permission !== "granted") {
-      Notification.requestPermission().then((permission) => {
-        console.log("Notification permission result:", permission);
-        if (permission !== "granted") {
-          console.warn("Notification permission denied, retrying in 5 seconds");
-          setTimeout(() => {
-            if (Notification.permission !== "granted") {
-              Notification.requestPermission().catch((err) => {
-                console.error("Retry failed for notification permission:", err);
-              });
-            }
-          }, 5000);
-        }
-      }).catch((err) => {
-        console.error("Failed to request notification permission:", err);
-      });
-    }
+    const requestPermission = () => {
+      if (typeof window === "undefined" || !("Notification" in window)) {
+        console.warn("Notifications not supported in this environment");
+        return;
+      }
+
+      console.log("NotificationPermission: Current permission:", Notification.permission);
+      if (Notification.permission === "default" && !permissionRequested.current) {
+        permissionRequested.current = true;
+        Notification.requestPermission().then((permission) => {
+          console.log("NotificationPermission: Result:", permission);
+          if (permission !== "granted") {
+            console.warn("Notification permission denied, retrying in 10 seconds");
+            setTimeout(() => {
+              if (Notification.permission !== "granted") {
+                permissionRequested.current = false; // Allow retry
+                requestPermission();
+              }
+            }, 10000);
+          }
+        }).catch((err) => {
+          console.error("NotificationPermission: Failed to request permission:", err);
+        });
+      }
+    };
+
+    requestPermission();
   }, []);
 
   return null;

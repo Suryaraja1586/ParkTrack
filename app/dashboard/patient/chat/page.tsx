@@ -43,17 +43,19 @@ export default function PatientChatPage() {
   const messageIds = useRef<Set<string>>(new Set())
   const pendingSend = useRef(false)
   const isAtBottom = useRef(true)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const router = useRouter()
   const pathname = usePathname()
 
-  // Request notification permission on load
+  // Preload audio for mobile
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission()
-      }
+    if (typeof window !== "undefined") {
+      audioRef.current = new Audio("/notification.mp3");
+      audioRef.current.preload = "auto";
+      audioRef.current.load();
+      console.log("Notification audio preloaded");
     }
-  }, [])
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     if (isAtBottom.current) {
@@ -124,6 +126,7 @@ export default function PatientChatPage() {
           return updatedMessages
         })
         setNewMessageCount(0)
+        console.log("Cleared newMessageCount on fetch")
         if (isAtBottom.current) {
           scrollToBottom()
         }
@@ -144,23 +147,24 @@ export default function PatientChatPage() {
   useEffect(() => {
     if (!user?.userId || !doctor?.$id) return
 
+    console.log("Subscribing to Appwrite Realtime channel for messages");
     const messageChannel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${APPWRITE_CONFIG.MESSAGE_COLLECTION_ID}.documents` as const
     const unsubscribeMessages = client.subscribe(messageChannel, (response: RealtimeResponse) => {
       try {
         if (response.events?.includes("databases.*.collections.*.documents.*.create")) {
           const newMessage = response.payload as Message
           console.log("New message received:", newMessage.$id, newMessage, "for doctor:", doctor?.$id)
-          
+
           if (messageIds.current.has(newMessage.$id)) {
             console.log("Duplicate message skipped:", newMessage.$id)
             return
           }
-          
+
           if (newMessage.senderId === user.userId && pendingSend.current) {
             console.log("Skipping message from current user during send:", newMessage.$id)
             return
           }
-          
+
           if (
             (newMessage.senderId === doctor.$id && newMessage.receiverId === user.userId) ||
             (newMessage.senderId === user.userId && newMessage.receiverId === doctor.$id)
@@ -175,22 +179,31 @@ export default function PatientChatPage() {
               console.log("Updated messages for doctor", doctor.$id, ":", updatedMessages.map((m) => m.$id))
               return updatedMessages
             })
-            
+
             if (newMessage.senderId !== user.userId) {
-              // Increment notification count for messages from doctor
-              setNewMessageCount((prev) => prev + 1)
-              console.log("Incremented notification count for doctor message")
-              
+              console.log("Triggering notification for doctor's message")
+              setNewMessageCount((prev) => {
+                const newCount = prev + 1
+                console.log("Updated newMessageCount:", newCount)
+                return newCount
+              })
               if (Notification.permission === "granted") {
                 new Notification("New Message from Dr. " + doctor.name, {
                   body: newMessage.message,
                   icon: "/icons/icon-192x192.png"
                 })
+                console.log("Browser notification sent for message:", newMessage.$id)
+              } else {
+                console.warn("Browser notifications not permitted, current permission:", Notification.permission)
               }
-              const audio = new Audio("/notification.mp3")
-              audio.play().catch((err) => console.error("Notification audio error:", err))
+              if (audioRef.current) {
+                audioRef.current.play().catch((err) => {
+                  console.error("Notification audio error:", err)
+                  toast.error("Failed to play notification sound")
+                })
+              }
             }
-            
+
             if (isAtBottom.current) {
               scrollToBottom()
             }
@@ -199,8 +212,8 @@ export default function PatientChatPage() {
           }
         }
       } catch (err) {
-        toast.error("Error processing message subscription")
-        console.error("Message subscription error:", err)
+        toast.error("Failed to process new message")
+        console.error("Realtime message subscription error:", err)
       }
     })
 
@@ -221,8 +234,8 @@ export default function PatientChatPage() {
           }
         }
       } catch (err) {
-        toast.error("Error processing typing subscription")
-        console.error("Typing subscription error:", err)
+        toast.error("Failed to process typing status")
+        console.error("Realtime typing subscription error:", err)
       }
     })
 
@@ -296,8 +309,7 @@ export default function PatientChatPage() {
       }
 
       if (fileId) newMessage.fileId = fileId
-      if (fileName) newMessage.fileName = fileName
-
+      if (fileName) newMessage
       const res = await databases.createDocument<Message>(
         APPWRITE_CONFIG.DATABASE_ID,
         APPWRITE_CONFIG.MESSAGE_COLLECTION_ID,
@@ -395,6 +407,7 @@ export default function PatientChatPage() {
 
   const clearNotifications = () => {
     setNewMessageCount(0)
+    console.log("Cleared newMessageCount")
   }
 
   if (isLoading) {
@@ -408,7 +421,6 @@ export default function PatientChatPage() {
   return (
     <div className="flex h-screen bg-gradient-to-br from-teal-100 to-gray-100">
       <div className="w-full flex flex-col">
-        {/* Chat Header */}
         <div className="bg-white p-4 shadow-md">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-teal-700">
@@ -427,8 +439,6 @@ export default function PatientChatPage() {
             )}
           </div>
         </div>
-
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50 chat-container" ref={chatContainerRef}>
           {isLoading ? (
             <p className="text-gray-500 text-center">Loading messages...</p>
@@ -467,8 +477,6 @@ export default function PatientChatPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Typing Indicator */}
         {isTyping && (
           <div className="text-gray-500 text-sm p-4">
             {doctor.name} is typing...
@@ -479,8 +487,6 @@ export default function PatientChatPage() {
             </div>
           </div>
         )}
-
-        {/* Message Input */}
         <div className="p-4 bg-white shadow-md">
           <div className="flex items-center gap-2">
             <input

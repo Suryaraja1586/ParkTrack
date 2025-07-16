@@ -44,15 +44,17 @@ export default function DoctorChatPage() {
   const messageIds = useRef<Set<string>>(new Set())
   const pendingSend = useRef(false)
   const isAtBottom = useRef(true)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const router = useRouter()
   const pathname = usePathname()
 
-  // Request notification permission on load
+  // Preload audio for mobile
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission()
-      }
+    if (typeof window !== "undefined") {
+      audioRef.current = new Audio("/notification.mp3")
+      audioRef.current.preload = "auto"
+      audioRef.current.load()
+      console.log("Notification audio preloaded")
     }
   }, [])
 
@@ -154,29 +156,30 @@ export default function DoctorChatPage() {
   useEffect(() => {
     if (!user?.userId) return
 
-    console.log("Subscribing to Appwrite Realtime channel for messages");
+    console.log("Subscribing to Appwrite Realtime channel for messages")
     const messageChannel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${APPWRITE_CONFIG.MESSAGE_COLLECTION_ID}.documents` as const
     const unsubscribeMessages = client.subscribe(messageChannel, (response: RealtimeResponse) => {
       try {
         if (response.events?.includes("databases.*.collections.*.documents.*.create")) {
           const newMessage = response.payload as Message
           console.log("New message received:", newMessage.$id, newMessage)
-          
+
           if (messageIds.current.has(newMessage.$id)) {
             console.log("Duplicate message skipped:", newMessage.$id)
             return
           }
-          
+
           if (newMessage.senderId === user.userId && pendingSend.current) {
             console.log("Skipping message from current user during send:", newMessage.$id)
             return
           }
 
           // Handle messages for currently selected patient
-          if (selectedPatientId && 
-              ((newMessage.senderId === selectedPatientId && newMessage.receiverId === user.userId) ||
-               (newMessage.senderId === user.userId && newMessage.receiverId === selectedPatientId))) {
-            
+          if (
+            selectedPatientId &&
+            ((newMessage.senderId === selectedPatientId && newMessage.receiverId === user.userId) ||
+             (newMessage.senderId === user.userId && newMessage.receiverId === selectedPatientId))
+          ) {
             messageIds.current.add(newMessage.$id)
             setMessages((prev) => {
               const updatedMessages = [...prev, newMessage].filter(
@@ -187,56 +190,67 @@ export default function DoctorChatPage() {
               console.log("Updated messages for patient", selectedPatientId, ":", updatedMessages.map((m) => m.$id))
               return updatedMessages
             })
-            
+
             if (newMessage.senderId !== user.userId) {
-              console.log("Triggering notification for current patient's message");
+              console.log("Triggering notification for current patient's message")
               if (Notification.permission === "granted") {
                 new Notification("New Message", {
                   body: newMessage.message,
                   icon: "/icons/icon-192x192.png"
-                });
-                console.log("Browser notification sent for message:", newMessage.$id);
+                })
+                console.log("Browser notification sent for message:", newMessage.$id)
+              } else {
+                console.warn("Browser notifications not permitted, current permission:", Notification.permission)
               }
-              const audio = new Audio("/notification.mp3")
-              audio.play().catch((err) => {
-                console.error("Notification audio error:", err);
-              });
+              if (audioRef.current) {
+                audioRef.current.play().catch((err) => {
+                  console.error("Notification audio error:", err)
+                  toast.error("Failed to play notification sound")
+                })
+              }
             }
-            
+
             if (isAtBottom.current) {
               scrollToBottom()
             }
-          } 
+          }
           // Handle messages from other patients (show badge)
           else if (newMessage.senderId !== user.userId) {
-            console.log("Message for another patient:", newMessage.$id, newMessage.senderId);
+            console.log("Message for another patient:", newMessage.$id, newMessage.senderId)
             setNewMessageAlert((prev) => {
-              const updated = { ...prev, [newMessage.senderId]: (prev[newMessage.senderId] || 0) + 1 };
-              console.log("Updated newMessageAlert:", updated);
-              return updated;
-            });
-            
+              const updated = { ...prev, [newMessage.senderId]: (prev[newMessage.senderId] || 0) + 1 }
+              console.log("Updated newMessageAlert:", updated)
+              return updated
+            })
+
             if (Notification.permission === "granted") {
-              const patient = patients.find(p => p.$id === newMessage.senderId)
+              const patient = patients.find((p) => p.$id === newMessage.senderId)
               new Notification("New Message", {
-                body: `${patient?.name || 'Patient'}: ${newMessage.message}`,
+                body: `${patient?.name || "Patient"}: ${newMessage.message}`,
                 icon: "/icons/icon-192x192.png"
-              });
+              })
+              console.log("Browser notification sent for other patient's message:", newMessage.$id)
+            } else {
+              console.warn("Browser notifications not permitted, current permission:", Notification.permission)
             }
-            
-            const audio = new Audio("/notification.mp3")
-            audio.play().catch((err) => {
-              console.error("Notification audio error:", err);
-            });
+
+            if (audioRef.current) {
+              audioRef.current.play().catch((err) => {
+                console.error("Notification audio error:", err)
+                toast.error("Failed to play notification sound")
+              })
+            }
           }
         }
       } catch (err) {
-        toast.error("Error processing message subscription")
-        console.error("Message subscription error:", err)
+        toast.error("Failed to process new message")
+        console.error("Realtime message subscription error:", err)
       }
     })
 
-    const typingChannel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${APPWRITE_CONFIG.TYPING_COLLECTION_ID || "typing_status"}.documents` as const
+    const typingChannel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${
+      APPWRITE_CONFIG.TYPING_COLLECTION_ID || "typing_status"
+    }.documents` as const
     const unsubscribeTyping = client.subscribe(typingChannel, (response: RealtimeResponse) => {
       try {
         if (response.events?.includes("databases.*.collections.*.documents.*.create")) {
@@ -254,8 +268,8 @@ export default function DoctorChatPage() {
           }
         }
       } catch (err) {
-        toast.error("Error processing typing subscription")
-        console.error("Typing subscription error:", err)
+        toast.error("Failed to process typing status")
+        console.error("Realtime typing subscription error:", err)
       }
     })
 
@@ -421,11 +435,22 @@ export default function DoctorChatPage() {
     }
   }
 
+  const selectPatient = (patientId: string) => {
+    setSelectedPatientId(patientId)
+    setNewMessageAlert((prev) => {
+      const updated = { ...prev, [patientId]: 0 }
+      console.log("Cleared notification for patient:", patientId, updated)
+      return updated
+    })
+    isAtBottom.current = true
+    console.log("Switched to patient:", patientId)
+  }
+
   const notificationCount = Object.values(newMessageAlert).reduce((sum, count) => sum + (count > 0 ? 1 : 0), 0)
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-teal-100 to-gray-100">
-      {/* Patients Sidebar */}
+      {/* Patients Sidebar (Desktop) */}
       <div className="w-1/4 bg-white shadow-md p-4 overflow-y-auto hidden md:block">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-teal-700">Patients</h2>
@@ -444,16 +469,7 @@ export default function DoctorChatPage() {
           patients.map((patient) => (
             <div
               key={patient.$id}
-              onClick={() => {
-                setSelectedPatientId(patient.$id)
-                setNewMessageAlert((prev) => {
-                  const updated = { ...prev, [patient.$id]: 0 };
-                  console.log("Cleared notification for patient:", patient.$id, updated);
-                  return updated;
-                })
-                isAtBottom.current = true
-                console.log("Switched to patient:", patient.$id)
-              }}
+              onClick={() => selectPatient(patient.$id)}
               className={`p-2 rounded-lg cursor-pointer hover:bg-teal-100 transition-all duration-200 ${
                 selectedPatientId === patient.$id ? "bg-teal-200" : ""
               }`}
@@ -476,11 +492,47 @@ export default function DoctorChatPage() {
 
       {/* Chat Area */}
       <div className="w-full md:w-3/4 flex flex-col">
-        {/* Chat Header */}
+        {/* Chat Header with Patient Selector (Mobile) */}
         <div className="bg-white p-4 shadow-md">
-          <h2 className="text-xl font-bold text-teal-700">
-            {patients.find((p) => p.$id === selectedPatientId)?.name || "Select a Patient"}
-          </h2>
+          <div className="block md:hidden mb-4">
+            {patients.length === 0 ? (
+              <p className="text-gray-500 text-center">No patients assigned yet.</p>
+            ) : (
+              <div className="flex overflow-x-auto space-x-2 pb-2">
+                {patients.map((patient) => (
+                  <button
+                    key={patient.$id}
+                    onClick={() => selectPatient(patient.$id)}
+                    className={`flex items-center px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                      selectedPatientId === patient.$id
+                        ? "bg-teal-200 text-teal-800"
+                        : "bg-teal-100 text-teal-700 hover:bg-teal-200"
+                    }`}
+                  >
+                    <span>{patient.name}</span>
+                    {newMessageAlert[patient.$id] > 0 && (
+                      <span className="ml-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                        {newMessageAlert[patient.$id]}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-teal-700">
+              {patients.find((p) => p.$id === selectedPatientId)?.name || "Select a Patient"}
+            </h2>
+            {notificationCount > 0 && (
+              <div className="relative hidden md:flex">
+                <Bell className="w-5 h-5 text-red-500 animate-pulse" />
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {notificationCount}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Messages */}
@@ -533,8 +585,8 @@ export default function DoctorChatPage() {
             {patients.find((p) => p.$id === selectedPatientId)?.name} is typing...
             <div id="typingIndicator" className="typing-dots inline-block ml-2">
               <span className="inline-block w-1 h-1 bg-gray-400 rounded-full animate-bounce mr-1"></span>
-              <span className="inline-block w-1 h-1 bg-gray-400 rounded-full animate-bounce mr-1" style={{animationDelay: '0.1s'}}></span>
-              <span className="inline-block w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
+              <span className="inline-block w-1 h-1 bg-gray-400 rounded-full animate-bounce mr-1" style={{ animationDelay: "0.1s" }}></span>
+              <span className="inline-block w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></span>
             </div>
           </div>
         )}
@@ -579,8 +631,19 @@ export default function DoctorChatPage() {
               disabled={!selectedPatientId || isSending}
               className="p-2 text-teal-700 hover:text-teal-800 transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                />
               </svg>
             </button>
             <button
@@ -588,7 +651,13 @@ export default function DoctorChatPage() {
               disabled={!selectedPatientId || isSending || (!message.trim() && !file)}
               className="p-2 bg-teal-700 text-white rounded-full hover:bg-teal-800 transition-colors disabled:opacity-50"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
             </button>

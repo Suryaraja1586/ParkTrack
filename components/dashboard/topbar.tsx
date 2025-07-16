@@ -68,7 +68,7 @@ export function Topbar() {
             </SheetContent>
           </Sheet>
         </div>
-        <h1 className="text-2xl font-bold text-teal-700">ParkTrack</h1>
+        <h1 className="text-2xl font-bold text-teal-700">CarePulse</h1>
       </div>
       <Button
         onClick={logout}
